@@ -11,6 +11,9 @@ if __name__ == '__main__':
     cnn_model = CNNModel()
     image_utility = ImageUtility()
 
+    # tf_record_util.generate_hm_and_save()
+    # tf_record_util.retrive_hm_and_test()
+
     # mat = np.random.randint(0, 10, size=10)
     # cnn_model.generate_distance_matrix(mat)
 
@@ -75,7 +78,7 @@ if __name__ == '__main__':
                     custom_loss=False,
                     arch='hg',
                     inception_mode=True,
-                    num_output_layers=4,
+                    num_output_layers=2,
                     weight=None)
 
 

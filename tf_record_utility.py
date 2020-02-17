@@ -18,10 +18,11 @@ from keras import backend as K
 from scipy import misc
 from scipy.ndimage import gaussian_filter, maximum_filter
 import copy
+from numpy import save, load, asarray
+import img_printer as imgpr
 
 
 class TFRecordUtility:
-
 
     def get_predicted_kp_from_htmap(self, heatmap, center, scale, outres):
         # nms to get location
@@ -232,7 +233,51 @@ class TFRecordUtility:
         y = np.arange(0, height, 1, float)[:, np.newaxis]
         return np.exp(-((x - x0) ** 2 + (y - y0) ** 2) / (2 * sigma ** 2))
 
-    def __generate_hm(self, height, width, landmarks, s=1.0):
+    # def retrive_hm_and_test(self):
+
+    def create_image_and_labels_name(self):
+        images_dir = IbugConf.images_dir
+        lbls_dir = IbugConf.lbls_dir
+
+        img_filenames = []
+        lbls_filenames = []
+
+        for file in os.listdir(images_dir):
+            if file.endswith(".jpg") or file.endswith(".png"):
+                img_filenames.append(images_dir + str(file))
+                lbls_filenames.append(lbls_dir + str(file)[:-3] + "npy")
+
+        return np.array(img_filenames), np.array(lbls_filenames)
+
+    def generate_hm_and_save(self):
+        images_dir = IbugConf.images_dir
+        npy_dir = IbugConf.lbls_dir
+
+        for file in os.listdir(images_dir):
+            if file.endswith(".pts"):
+                points_arr = []
+                file_name = os.path.join(images_dir, file)
+                file_name_save = str(file)[:-3] + "npy"
+                with open(file_name) as fp:
+                    line = fp.readline()
+                    cnt = 1
+                    while line:
+                        if 3 < cnt < 72:
+                            x_y_pnt = line.strip()
+                            x = float(x_y_pnt.split(" ")[0])
+                            y = float(x_y_pnt.split(" ")[1])
+                            points_arr.append(x)
+                            points_arr.append(y)
+                        line = fp.readline()
+                        cnt += 1
+                hm = self.generate_hm(56, 56, np.array(points_arr), 1.5, False)
+                hm_f = npy_dir+file_name_save
+                # imgpr.print_image_arr_heat(1, hm, print_single=False)
+
+                save(hm_f, hm)
+
+
+    def generate_hm(self, height, width, landmarks, s=1.0, upsample=True):
         """ Generate a full Heap Map for every landmarks in an array
         Args:
             height    : The height of Heat Map (the height of target output)
@@ -240,21 +285,23 @@ class TFRecordUtility:
             joints    : [(x1,y1),(x2,y2)...] containing landmarks
             maxlenght : Lenght of the Bounding Box
         """
+
         Nlandmarks = len(landmarks)
-        hm = np.zeros((height, width, Nlandmarks//2), dtype=np.float32)
+        hm = np.zeros((height, width, Nlandmarks // 2), dtype=np.float32)
 
         j = 0
         for i in range(0, Nlandmarks, 2):
-            z = np.zeros(shape=[width, height])
 
-            x = (112 - float(landmarks[i]) * 224)
-            y = (112 - float(landmarks[i + 1]) * 224)
+            if upsample:
+                x = (112 - float(landmarks[i]) * 224)
+                y = (112 - float(landmarks[i + 1]) * 224)
+            else:
+                x = landmarks[i]
+                y = landmarks[i + 1]
 
             x = int(x // 4)
             y = int(y // 4)
-            #
-            # z[x, y] = 1.0
-            # hm[:, :, j] = z
+
             hm[:, :, j] = self.__gaussian_k(x, y, s, height, width)
             j += 1
         return hm
@@ -685,7 +732,6 @@ class TFRecordUtility:
         fileDir = os.path.dirname(os.path.realpath('__file__'))
         pst_file_arr = []
         png_file_arr = []
-        detect = PoseDetector()
         for file in os.listdir(IbugConf.rotated_img_path_prefix):
             if file.endswith(".jpg") or file.endswith(".png"):
                 png_file_arr.append(os.path.join(IbugConf.rotated_img_path_prefix, file))
@@ -862,7 +908,6 @@ class TFRecordUtility:
         fileDir = os.path.dirname(os.path.realpath('__file__'))
         pst_file_arr = []
         png_file_arr = []
-        detect = PoseDetector()
         for file in os.listdir(IbugConf.img_path_prefix):
             if file.endswith(".jpg") or file.endswith(".png"):
                 png_file_arr.append(os.path.join(IbugConf.img_path_prefix, file))

@@ -25,6 +25,7 @@ import os
 from sklearn.model_selection import train_test_split
 from numpy import save, load, asarray
 import os.path
+from keras import losses
 
 class Train:
     def __init__(self, use_tf_record, dataset_name, custom_loss, arch, inception_mode, num_output_layers, weight=None):
@@ -44,7 +45,7 @@ class Train:
         if custom_loss:
             self.loss = c_loss.custom_loss_hm
         else:
-            self.loss = keras.losses.mse
+            self.loss = losses.mean_squared_error
 
         self.arch = arch
         self.inception_mode = inception_mode
@@ -67,11 +68,12 @@ class Train:
         optimizer = self._get_optimizer()
 
         '''create train, validation, test data iterator'''
-        x_train_filenames, x_val_filenames, y_train, y_val = self._create_generators()
-        print('done !!!')
+        x_train_filenames, x_val_filenames, y_train_filenames, y_val_filenames = self._create_generators()
 
-        my_training_batch_generator = Custom_Heatmap_Generator(x_train_filenames, y_train, self.BATCH_SIZE)
-        my_validation_batch_generator = Custom_Heatmap_Generator(x_val_filenames, y_val,  self.BATCH_SIZE)
+        my_training_batch_generator = Custom_Heatmap_Generator(x_train_filenames, y_train_filenames,
+                                                               self.BATCH_SIZE, self.num_output_layers)
+        my_validation_batch_generator = Custom_Heatmap_Generator(x_val_filenames, y_val_filenames,
+                                                                 self.BATCH_SIZE, self.num_output_layers)
 
         '''creating model'''
         model = self._get_model(None)
@@ -96,7 +98,8 @@ class Train:
                             callbacks=callbacks_list,
                             use_multiprocessing=True,
                             workers=16,
-                            max_queue_size=32)
+                            max_queue_size=64
+                            )
 
     def train_fit(self):
         tf_record_util = TFRecordUtility()
@@ -157,13 +160,16 @@ class Train:
         return tensors
 
     def _generate_loss_weights(self):
-        return [1]
+        wights = []
+        for i in range(self.num_output_layers):
+            wights.append(1)
+        return wights
 
     def _get_model(self, train_images):
         cnn = CNNModel()
         if self.arch == 'hg':
             model = cnn.hour_glass_network(num_stacks=self.num_output_layers)
-        elif self.arch == '':
+        elif self.arch == 'mn_r':
             model = cnn.mnv2_hm(tensor=train_images)
         elif self.arch == '':
             model = cnn.mnv2_hm_r_v2(tensor=train_images, inception_mode=self.inception_mode)
@@ -188,46 +194,20 @@ class Train:
         tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
         return [checkpoint, early_stop, csv_logger, clr, tensorboard_callback]
 
-    def _create_file_name_and_label(self):
-        images_dir = '/media/ali/extradata/facial_landmark_ds/from_ibug/train_set/train_before_heatmap/'
-
-        subdirs, dirs, files = os.walk(images_dir).__next__()
-
-        filenames = []
-        labels = []
-
-        for file in os.listdir(images_dir):
-            if file.endswith(".jpg") or file.endswith(".png"):
-                file_name = os.path.join(images_dir, file)
-                filenames.append(file_name)
-                pts_file = file_name[:-3] + "pts"
-                points_arr = []
-                with open(pts_file) as fp:
-                    line = fp.readline()
-                    cnt = 1
-                    while line:
-                        if 3 < cnt < 72:
-                            x_y_pnt = line.strip()
-                            x = float(x_y_pnt.split(" ")[0])
-                            y = float(x_y_pnt.split(" ")[1])
-                            points_arr.append(x)
-                            points_arr.append(y)
-                        line = fp.readline()
-                        cnt += 1
-                labels.append(points_arr)
-        return np.array(filenames), np.array(labels)
 
     def _create_generators(self):
+        tf_utils = TFRecordUtility()
+
         if os.path.isfile('x_train_filenames.npy') and \
                 os.path.isfile('x_val_filenames.npy') and \
-                os.path.isfile('y_train.npy') and \
-                os.path.isfile('y_val.npy'):
+                os.path.isfile('y_train_filenames.npy') and \
+                os.path.isfile('y_val_filenames.npy'):
             x_train_filenames = load('x_train_filenames.npy')
             x_val_filenames = load('x_val_filenames.npy')
-            y_train = load('y_train.npy')
-            y_val = load('y_val.npy')
+            y_train = load('y_train_filenames.npy')
+            y_val = load('y_val_filenames.npy')
         else:
-            filenames, labels = self._create_file_name_and_label()
+            filenames, labels = tf_utils.create_image_and_labels_name()
 
             filenames_shuffled, y_labels_shuffled = shuffle(filenames, labels)
 
@@ -236,8 +216,8 @@ class Train:
 
             save('x_train_filenames.npy', x_train_filenames)
             save('x_val_filenames.npy', x_val_filenames)
-            save('y_train.npy', y_train)
-            save('y_val.npy', y_val)
+            save('y_train_filenames.npy', y_train)
+            save('y_val_filenames.npy', y_val)
 
         return x_train_filenames, x_val_filenames, y_train, y_val
 

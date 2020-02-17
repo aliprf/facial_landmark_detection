@@ -38,11 +38,8 @@ class CNNModel:
                               num_channels=num_channels,
                               inres=in_shape,
                               outres=out_shape)
-        return hg_net
-
-    @staticmethod
-    def dd():
-        print("dsfsd")
+        model = hg_net.build_model()
+        return model
 
     def shrink_v1_mobileNet_v2_multi_task(self, tensor):
         mobilenet_model = mobilenet_v2.MobileNetV2(input_shape=None,
