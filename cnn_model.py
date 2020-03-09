@@ -1,6 +1,7 @@
 from configuration import DatasetName, DatasetType, \
     AffectnetConf, IbugConf, W300Conf, InputDataSize, LearningConfig
 from hg_Class import HourglassNet
+from shallow_reg_network import ShallowRegNetwork
 
 import tensorflow as tf
 import keras
@@ -11,7 +12,8 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 from keras.models import Model
 from keras.applications import mobilenet_v2, mobilenet, resnet50, densenet
 from keras.layers import Dense, MaxPooling2D, Conv2D, Flatten, \
-    BatchNormalization, Activation, GlobalAveragePooling2D, DepthwiseConv2D, Dropout, ReLU, Concatenate, Deconvolution2D
+    BatchNormalization, Activation, GlobalAveragePooling2D, DepthwiseConv2D, \
+    Dropout, ReLU, Concatenate, Deconvolution2D, Input
 
 from keras.callbacks import ModelCheckpoint
 from keras import backend as K
@@ -32,6 +34,8 @@ import scipy.io as sio
 
 
 class CNNModel:
+    def create_shallow_reg(self):
+        sh_net = ShallowRegNetwork()
 
     def hour_glass_network(self, num_classes=68, num_stacks=4, num_channels=512, in_shape=(224, 224), out_shape=(56, 56)):
         hg_net = HourglassNet(num_classes=num_classes, num_stacks=num_stacks,
@@ -110,8 +114,45 @@ class CNNModel:
         # revised_model = Model(inp, [Logits, Logits_nose, Logits_eyes, Logits_face, Logits_mouth, Logits_pose])
         return revised_model
 
-    def shrink_v2_mobileNet_v2_single_task(self, tensor, pose):
-        mobilenet_model = mobilenet_v2.MobileNetV2(input_shape=None,
+    def test_model(self):
+        input_1 = Input(shape=(224, 224, 3))
+
+        conv1 = Conv2D(16, (3, 3), activation='relu', padding="SAME")(input_1)
+        pool1 = MaxPooling2D(pool_size=(2, 2), strides=2)(conv1)
+        conv2 = Conv2D(32, (3, 3), activation='relu', padding="SAME")(pool1)
+        pool2 = MaxPooling2D(pool_size=(2, 2), strides=2)(conv2)
+        flat_1 = Flatten()(pool2)
+
+        # feature extraction from RGB image
+        inputs_2 = Input(shape=(224, 224, 3))
+
+        conv1_2 = Conv2D(16, (3, 3), activation='relu', padding="SAME")(inputs_2)
+        pool1_2 = MaxPooling2D(pool_size=(2, 2), strides=2)(conv1_2)
+        conv2_2 = Conv2D(32, (3, 3), activation='relu', padding="SAME")(pool1_2)
+        pool2_2 = MaxPooling2D(pool_size=(2, 2), strides=2)(conv2_2)
+        flat_2 = Flatten()(pool2_2)
+
+        # concatenate both feature layers and define output layer after some dense layers
+        concat = Concatenate()([flat_1, flat_2])
+        dense1 = Dense(60, activation='relu')(concat)
+        dense2 = Dense(60, activation='relu')(dense1)
+        dense3 = Dense(60, activation='relu')(dense2)
+        output_1 = Dense(2)(dense3)
+        output_2 = Dense(2)(dense3)
+
+        # create model with two inputs
+        model = Model([input_1, inputs_2], [output_1, output_2])
+        model_json = model.to_json()
+
+        with open("test_model.json", "w") as json_file:
+            json_file.write(model_json)
+
+        model.summary()
+        return model
+
+
+    def mobileNet_v2_small(self, tensor):
+        mobilenet_model = mobilenet_v2.MobileNetV2(input_shape=[56, 56, 68],
                                                    alpha=1.0,
                                                    include_top=True,
                                                    weights=None,
@@ -120,126 +161,21 @@ class CNNModel:
 
         mobilenet_model.layers.pop()
 
+        x = mobilenet_model.get_layer('global_average_pooling2d_1').output  # 1280
+        x = Dense(LearningConfig.landmark_len, name='dense_layer_out_2', activation='relu',
+                  kernel_initializer='he_uniform')(x)
+        out = Dense(LearningConfig.landmark_len, name='out')(x)
+
         inp = mobilenet_model.input
 
-        '''------------------------------------'''
-        '''residual network_branch_1'''
-        '''     block_1  '''
-        r1_block_1_project_BN = mobilenet_model.get_layer('block_1_project_BN').output  # 56, 56, 24
-        r1_dasm_1_conv_2d = Conv2D(filters=32, kernel_size=(3, 3), strides=(2, 2), padding='same',
-                                use_bias=False,
-                                name='r1_dasm_1_conv_2d', kernel_initializer='normal')(r1_block_1_project_BN)
-        r1_dasm_1_BN = BatchNormalization(epsilon=1e-3, momentum=0.999,
-                                       name='r1_dasm_1_BN')(r1_dasm_1_conv_2d)  # 28, 28, 32
-        # r1_dasm_1_relu = ReLU(6., name='r1_dasm_1_relu')(r1_dasm_1_BN)
+        revised_model = Model(inp, out)
 
-        block_3_project_BN = mobilenet_model.get_layer('block_3_project_BN').output  # 28, 28, 32
-        r1_dasm_combined_1_and_3_layer = keras.layers.add([r1_dasm_1_BN, block_3_project_BN])  # 28, 28, 32
+        revised_model.summary()
+        # plot_model(revised_model, to_file='mobileNet_v2_main.png', show_shapes=True, show_layer_names=True)
+        model_json = revised_model.to_json()
 
-        '''     block_2 '''
-        x = Conv2D(6 * 32, kernel_size=1, padding='same', use_bias=False, activation=None,
-                   name='r1_dasm_combined_1_and_3_layer_expand')(r1_dasm_combined_1_and_3_layer)  # 28, 28, 6*32=192
-        x = BatchNormalization(epsilon=1e-3, momentum=0.999, name='r1_dasm_combined_1_and_3_layer_expand_BN')(x)
-        x = ReLU(6., name='r1_dasm_combined_1_and_3_layer_expand_relu')(x)
-        x = DepthwiseConv2D(kernel_size=3, strides=1, activation=None, use_bias=False, padding='same',
-                            name='r1_dasm_combined_1_and_3_layer_depthwise')(x)
-        x = BatchNormalization(epsilon=1e-3, momentum=0.999,
-                               name='r1_dasm_combined_1_and_3_layer_depthwise_BN')(x)
-        x = ReLU(6., name='r1_dasm_combined_1_and_3_layer_depthwise_BN_relu')(x)
-
-        x = Conv2D(32, kernel_size=1, padding='same', use_bias=False, activation=None,
-                   name='r1_dasm_combined_1_and_3_layer_project')(x)  # 28, 28, 6*32=192
-        x = BatchNormalization(epsilon=1e-3, momentum=0.999,
-                               name='r1_dasm_combined_1_and_3_layer_project_project_BN')(x)  # 28, 28, 32
-
-        x = ReLU(6., name='r1_dasm_combined_1_and_3_layer_project_project_BN_relu')(x)
-
-        y = Conv2D(filters=64, kernel_size=(3, 3), strides=(2, 2), padding='same',
-                   use_bias=False,
-                   name='r1_dasm_1_and_3_reduce_conv_2d', kernel_initializer='normal')(x)  # 14, 14, 64
-        r1_dasm_1_and_3_reduce_BN = BatchNormalization(epsilon=1e-3, momentum=0.999,
-                               name='r1_dasm_1_and_3_reduce_BN')(y)
-        # r1_dasm_1_and_3_reduce_BN_relu = ReLU(6., name='r1_dasm_1_and_3_reduce_BN_relu')(y)  # 14, 14, 64
-
-        block_6_project_BN = mobilenet_model.get_layer('block_6_project_BN').output  # 14, 14, 64
-        dasm_combined_1_3_and_6_layer = keras.layers.add([block_6_project_BN,
-                                                          r1_dasm_1_and_3_reduce_BN])  # 14, 14, 64
-        '''     block_3 '''
-        x = Conv2D(6 * 64, kernel_size=1, padding='same', use_bias=False, activation=None,
-                   name='r1_dasm_combined_1_3_and_6_layer_expand')(dasm_combined_1_3_and_6_layer)  # 14, 14, 6*64=384
-        x = BatchNormalization(epsilon=1e-3, momentum=0.999, name='r1_dasm_combined_1_3_and_6_layer_expand_BN')(x)
-        x = ReLU(6., name='r1_dasm_combined_1_3_and_6_layer_expand_relu')(x)
-        x = DepthwiseConv2D(kernel_size=3, strides=1, activation=None, use_bias=False, padding='same',
-                            name='r1_dasm_combined_1_3_and_6_layer_depthwise')(x)
-        x = BatchNormalization(epsilon=1e-3, momentum=0.999,
-                               name='r1_dasm_combined_1_3_and_6_layer_depthwise_BN')(x)  # 14, 14, 64
-        x = ReLU(6., name='r1_dasm_combined_1_3_and_6_layer_depthwise_relu')(x)
-        x = Conv2D(64, kernel_size=1, padding='same', use_bias=False, activation=None,
-                   name='r1_dasm_combined_1_3_and_6_layer_conv2d')(x)  # 14, 14, 64
-        r1_dasm_combined_1_3_and_6_layer_expand_BN_expand_BN = BatchNormalization(epsilon=1e-3, momentum=0.999,
-                               name='r1_dasm_combined_1_3_and_6_layer_conv2d_BN')(x)  # 14, 14, 64
-        '''------------------------------------'''
-        '''residual network_branch_2'''
-        # res_line_2
-        block_1_project_BN = mobilenet_model.get_layer('block_1_project_BN').output  # 56, 56, 24
-        dasm_1_conv_2d = Conv2D(filters=32, kernel_size=(3, 3), strides=(2, 2), padding='same',
-                                use_bias=False,
-                                name='r2_dasm_1_conv_2d', kernel_initializer='normal')(block_1_project_BN)
-        dasm_1_BN = BatchNormalization(epsilon=1e-3, momentum=0.999,
-                                       name='r2_dasm_1_BN')(dasm_1_conv_2d)  # 28, 28, 32
-        # dasm_1_relu = ReLU(6., name='r2_dasm_1_relu')(dasm_1_BN)
-
-        block_3_project_BN = mobilenet_model.get_layer('block_3_project_BN').output  # 28, 28, 32
-        dasm_combined_1_and_3_layer = keras.layers.add([dasm_1_BN, block_3_project_BN])  # 28, 28, 32
-
-        # rev_res 1
-        x = Conv2D(6 * 32, kernel_size=1, padding='same', use_bias=False, activation=None,
-                   name='r2_dasm_combined_1_and_3_layer_expand')(dasm_combined_1_and_3_layer)
-        x = BatchNormalization(epsilon=1e-3, momentum=0.999, name='r2_dasm_combined_1_and_3_layer_expand_BN')(x)
-        x = ReLU(6., name='r2_dasm_combined_1_and_3_layer_expand_relu')(x)
-        x = DepthwiseConv2D(kernel_size=3, strides=1, activation=None, use_bias=False, padding='same',
-                            name='r2_dasm_combined_1_and_3_layer_depthwise')(x)
-        x = BatchNormalization(epsilon=1e-3, momentum=0.999,
-                               name='r2_dasm_combined_1_and_3_layer_depthwise_BN')(x)
-        x = ReLU(6., name='r2_dasm_combined_1_and_3_layer_depthwise_BN_relu')(x)
-        x = Conv2D(32, kernel_size=1, padding='same', use_bias=False, activation=None,
-                   name='r2_dasm_combined_1_and_3_layer_project')(x)
-        x = BatchNormalization(epsilon=1e-3, momentum=0.999,
-                               name='dasm_combined_1_and_3_layer_project_project_BN')(x)  # 28, 28, 32
-        x = ReLU(6., name='r2_dasm_combined_1_and_3_layer_project_project_BN_relu')(x)
-        y = Conv2D(filters=64, kernel_size=(3, 3), strides=(2, 2), padding='same',
-                   use_bias=False,
-                   name='r2_dasm_1_and_3_reduce_conv_2d', kernel_initializer='normal')(x)
-        dasm_1_and_3_reduce_BN = BatchNormalization(epsilon=1e-3, momentum=0.999,
-                               name='r2_dasm_1_and_3_reduce_BN')(y)
-
-        # res 3
-        block_9_project_BN = mobilenet_model.get_layer('block_9_project_BN').output  # 14, 14, 64
-        dasm_1_3_and_dasm_1_3_6_and_9_layer = keras.layers.add([block_9_project_BN,
-                                                                dasm_1_and_3_reduce_BN,
-                                                                r1_dasm_combined_1_3_and_6_layer_expand_BN_expand_BN])  # 14, 14, 64
-
-        '''reducing to 7'''
-        Conv_0 = Conv2D(128, kernel_size=1, padding='same', use_bias=False, activation=None,
-                   name='Conv_0')(dasm_1_3_and_dasm_1_3_6_and_9_layer)  # 14, 14, 64
-        Conv_0_BN = BatchNormalization(epsilon=1e-3, momentum=0.999, name='Conv_0_BN')(Conv_0)  # 14, 14, 64
-        Conv_0_ReLU = ReLU(6., name='Conv_0_ReLU')(Conv_0_BN)
-        #..
-        x = Conv2D(256, kernel_size=1, use_bias=False, name='Conv_1')(Conv_0_ReLU)
-        x = BatchNormalization(epsilon=1e-3, momentum=0.999, name='Conv_1_bn')(x)
-        x = ReLU(6., name='out_relu')(x)
-        x = GlobalAveragePooling2D()(x)
-        x = Dense(LearningConfig.landmark_len, name='dense_layer_out_2', activation='relu'
-                  , kernel_initializer='he_uniform')(x)
-
-        Logits = Dense(LearningConfig.landmark_len, name='out_main')(x)
-
-        out_pose = Dense(InputDataSize.pose_len, name='out_pose')(x)
-
-        if pose:
-            revised_model = Model(inp, [Logits, out_pose])
-        else:
-            revised_model = Model(inp, [Logits])
+        with open("0mobileNet_v2_small.json", "w") as json_file:
+            json_file.write(model_json)
 
         return revised_model
 
@@ -2618,10 +2554,11 @@ class CNNModel:
         x = mobilenet_model.get_layer('global_average_pooling2d_1').output  # 1280
         x = Dense(LearningConfig.landmark_len, name='dense_layer_out_2', activation='relu',
                   kernel_initializer='he_uniform')(x)
-        Logits = Dense(LearningConfig.landmark_len, name='out')(x)
+        out = Dense(LearningConfig.landmark_len, name='out')(x)
+
         inp = mobilenet_model.input
 
-        revised_model = Model(inp, Logits)
+        revised_model = Model(inp, out)
 
         revised_model.summary()
         # plot_model(revised_model, to_file='mobileNet_v2_main.png', show_shapes=True, show_layer_names=True)

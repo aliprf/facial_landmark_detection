@@ -4,7 +4,7 @@ from tf_record_utility import TFRecordUtility
 from cnn_model import CNNModel
 from pca_utility import PCAUtility
 from image_utility import ImageUtility
-from Data_custom_generator import Custom_Heatmap_Generator
+from data_Heatmap_Generator import DataHeatmapGenerator
 import tensorflow as tf
 import keras
 

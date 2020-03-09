@@ -55,7 +55,7 @@ class LearningConfig:
     MAX_LR = 1e-2
     STEP_SIZE = 10
 
-    batch_size = 1
+    batch_size = 2
     steps_per_validation_epochs = 5
     epochs = 150
     landmark_len = 136
@@ -121,7 +121,14 @@ class W300Conf:
 class IbugConf:
 
     images_dir = '/media/ali/extradata/facial_landmark_ds/from_ibug/train_set/train_before_heatmap/'
-    lbls_dir = '/media/ali/extradata/facial_landmark_ds/from_ibug/train_set/train_before_heatmap_npy/'
+
+    train_intermediate_img_dir = '/media/ali/extradata/facial_landmark_ds/from_ibug/train_set/train_intermediate_img/'
+    train_intermediate_lbl_dir = '/media/ali/extradata/facial_landmark_ds/from_ibug/train_set/train_intermediate_lbl/'
+    num_intermediate_img = 123615
+
+
+    lbls_dir_hm = '/media/ali/extradata/facial_landmark_ds/from_ibug/train_set/train_before_heatmap_npy_hm/'
+    lbls_dir_pw = '/media/ali/extradata/facial_landmark_ds/from_ibug/train_set/train_before_heatmap_npy_pw/'
 
 
     tf_train_path = '/media/ali/extradata/facial_landmark_ds/from_ibug/train_set/train.tfrecords'

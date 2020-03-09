@@ -8,8 +8,11 @@ from tf_record_utility import  TFRecordUtility
 from configuration import DatasetName, DatasetType, \
     AffectnetConf, IbugConf, W300Conf, InputDataSize, LearningConfig
 from numpy import save, load, asarray
+from cnn_model import CNNModel
+import img_printer as imgpr
+from keras import backend as K
 
-class Custom_Heatmap_Generator(keras.utils.Sequence):
+class DataPWGenerator(keras.utils.Sequence):
 
     def __init__(self, image_filenames, label_filenames, batch_size, n_outputs):
         self.image_filenames = image_filenames
@@ -26,11 +29,19 @@ class Custom_Heatmap_Generator(keras.utils.Sequence):
         batch_x = self.image_filenames[idx * self.batch_size:(idx + 1) * self.batch_size]
         batch_y = self.label_filenames[idx * self.batch_size:(idx + 1) * self.batch_size]
 
-        img_batch = np.array([imread(file_name) for file_name in batch_x])
-        lbl_batch = np.array([load(file_name) for file_name in batch_y])
+        img_batch = np.array([self._image_read(file_name) for file_name in batch_x])
+        lbl_batch = np.array([self._lbl_prepration(file_name) for file_name in batch_y])
 
         lbl_out_array = []
         for i in range(self.n_outputs):
             lbl_out_array.append(lbl_batch)
 
         return img_batch, lbl_out_array
+
+    def _lbl_prepration(self, file_name):
+        lbl = load(file_name)
+        return lbl
+
+    def _image_read(self, file_name):
+        input = load(file_name)
+        return input

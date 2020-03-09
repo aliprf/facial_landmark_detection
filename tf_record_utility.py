@@ -20,7 +20,7 @@ from scipy.ndimage import gaussian_filter, maximum_filter
 import copy
 from numpy import save, load, asarray
 import img_printer as imgpr
-
+from tqdm import tqdm
 
 class TFRecordUtility:
 
@@ -235,9 +235,47 @@ class TFRecordUtility:
 
     # def retrive_hm_and_test(self):
 
-    def create_image_and_labels_name(self):
+    def create_fused_images_and_labels_name(self):
+        images_dir = IbugConf.train_intermediate_img_dir
+        lbls_dir = IbugConf.train_intermediate_lbl_dir
+
+        img_filenames = []
+        lbls_filenames = []
+
+        for file in os.listdir(images_dir):
+            if file.endswith(".npy"):
+                img_filenames.append(images_dir + str(file))
+                lbls_filenames.append(lbls_dir + str(file))
+
+        return np.array(img_filenames), np.array(lbls_filenames)
+
+    # def create_fused_images_and_labels_name(self):
+    #     images_dir = IbugConf.train_intermediate_img_dir
+    #     lbls_dir = IbugConf.train_intermediate_lbl_dir
+    #
+    #     img_dic = {}
+    #     lbl_dic = {}
+    #     for folder in os.listdir(images_dir):
+    #         img_filenames = []
+    #         lbls_filenames = []
+    #         for file in os.listdir(images_dir + folder + '/'):
+    #             if file.endswith(".npy"):
+    #                 img_filenames.append(images_dir + folder + '/' + str(file))
+    #                 lbls_filenames.append(lbls_dir + folder + '/' + str(file))
+    #         img_dic[folder] = img_filenames
+    #         lbl_dic[folder] = lbls_filenames
+    #
+    #     return np.array(img_dic), np.array(lbl_dic)
+
+
+    def create_image_and_labels_name(self, point_wise):
         images_dir = IbugConf.images_dir
-        lbls_dir = IbugConf.lbls_dir
+        if point_wise:
+            lbls_dir = IbugConf.lbls_dir_pw
+        else:
+            lbls_dir = IbugConf.lbls_dir_hm
+
+        lbl_postfix = "npy"
 
         img_filenames = []
         lbls_filenames = []
@@ -245,15 +283,16 @@ class TFRecordUtility:
         for file in os.listdir(images_dir):
             if file.endswith(".jpg") or file.endswith(".png"):
                 img_filenames.append(images_dir + str(file))
-                lbls_filenames.append(lbls_dir + str(file)[:-3] + "npy")
+                lbls_filenames.append(lbls_dir + str(file)[:-3] + lbl_postfix)
 
         return np.array(img_filenames), np.array(lbls_filenames)
 
-    def generate_hm_and_save(self):
+    def generate_points_and_save(self):
         images_dir = IbugConf.images_dir
-        npy_dir = IbugConf.lbls_dir
+        npy_dir = IbugConf.lbls_dir_pw
 
-        for file in os.listdir(images_dir):
+        i = 0
+        for file in tqdm(os.listdir(images_dir)):
             if file.endswith(".pts"):
                 points_arr = []
                 file_name = os.path.join(images_dir, file)
@@ -270,22 +309,43 @@ class TFRecordUtility:
                             points_arr.append(y)
                         line = fp.readline()
                         cnt += 1
-                hm = self.generate_hm(56, 56, np.array(points_arr), 1.5, False)
-                hm_f = npy_dir+file_name_save
-                # imgpr.print_image_arr_heat(1, hm, print_single=False)
+                points = np.array(points_arr)
+                # points = points.reshape([68, 2])
 
+                p_f = npy_dir + file_name_save
+                i += 1
+                save(p_f, points)
+
+    def generate_hm_and_save(self):
+        images_dir = IbugConf.images_dir
+        npy_dir = IbugConf.lbls_dir_hm
+
+        i =0
+        for file in tqdm(os.listdir(images_dir)):
+            if file.endswith(".pts"):
+                points_arr = []
+                file_name = os.path.join(images_dir, file)
+                file_name_save = str(file)[:-3] + "npy"
+                with open(file_name) as fp:
+                    line = fp.readline()
+                    cnt = 1
+                    while line:
+                        if 3 < cnt < 72:
+                            x_y_pnt = line.strip()
+                            x = float(x_y_pnt.split(" ")[0])
+                            y = float(x_y_pnt.split(" ")[1])
+                            points_arr.append(x)
+                            points_arr.append(y)
+                        line = fp.readline()
+                        cnt += 1
+                hm = self.generate_hm(56, 56, np.array(points_arr), 0.7, False)
+                hm_f = npy_dir+file_name_save
+                imgpr.print_image_arr(i, hm, [],[])
+                i += 1
                 save(hm_f, hm)
 
 
     def generate_hm(self, height, width, landmarks, s=1.0, upsample=True):
-        """ Generate a full Heap Map for every landmarks in an array
-        Args:
-            height    : The height of Heat Map (the height of target output)
-            width     : The width  of Heat Map (the width of target output)
-            joints    : [(x1,y1),(x2,y2)...] containing landmarks
-            maxlenght : Lenght of the Bounding Box
-        """
-
         Nlandmarks = len(landmarks)
         hm = np.zeros((height, width, Nlandmarks // 2), dtype=np.float32)
 
