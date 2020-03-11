@@ -33,15 +33,21 @@ class DataPWGenerator(keras.utils.Sequence):
         lbl_batch = np.array([self._lbl_prepration(file_name) for file_name in batch_y])
 
         lbl_out_array = []
+        img_out_array = []
         for i in range(self.n_outputs):
             lbl_out_array.append(lbl_batch)
+            img_out_array.append(img_batch)
 
-        return img_batch, lbl_out_array
+        return img_out_array, lbl_out_array
 
     def _lbl_prepration(self, file_name):
+        return np.zeros(shape=[2])
+
         lbl = load(file_name)
         return lbl
 
     def _image_read(self, file_name):
+        return np.zeros(shape=[32, 32, 3])
+
         input = load(file_name)
         return input

@@ -35,7 +35,8 @@ import scipy.io as sio
 
 class CNNModel:
     def create_shallow_reg(self):
-        sh_net = ShallowRegNetwork()
+        sh_net = ShallowRegNetwork(inp_shape=32, out_shape=2, num_branches=2, num_filters=32)
+        return sh_net.create_model()
 
     def hour_glass_network(self, num_classes=68, num_stacks=4, num_channels=512, in_shape=(224, 224), out_shape=(56, 56)):
         hg_net = HourglassNet(num_classes=num_classes, num_stacks=num_stacks,

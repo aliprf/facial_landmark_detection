@@ -235,17 +235,45 @@ class TFRecordUtility:
 
     # def retrive_hm_and_test(self):
 
-    def create_fused_images_and_labels_name(self):
+    def create_fused_images_and_labels_name(self, num_points=68):
         images_dir = IbugConf.train_intermediate_img_dir
         lbls_dir = IbugConf.train_intermediate_lbl_dir
 
         img_filenames = []
         lbls_filenames = []
 
-        for file in os.listdir(images_dir):
+        for file in tqdm(os.listdir(images_dir+'68/')):
             if file.endswith(".npy"):
-                img_filenames.append(images_dir + str(file))
-                lbls_filenames.append(lbls_dir + str(file))
+                file_name = str(file)
+                tmp_spl = file_name.split('_')
+                if len(tmp_spl) == 2:
+                    file_name = tmp_spl[0]
+                if len(tmp_spl) == 3:
+                    file_name = tmp_spl[0] + "_" + tmp_spl[1]
+                img_filenames.append(file_name)
+                lbls_filenames.append(file_name)
+
+            # exist = True
+            # if file.endswith(".npy"):
+            #     for i in range(num_points):
+            #         file_name = str(file)
+            #         tmp_spl = file_name.split('_')
+            #
+            #         if len(tmp_spl) == 2:
+            #             file_name = tmp_spl[0]
+            #             file = file_name + '_' + str(i + 1) + ".npy"
+            #         if len(tmp_spl) == 3:
+            #             file_name = tmp_spl[0]+"_" + tmp_spl[1]
+            #             file = file_name + '_' + str(i+1)+".npy"
+            #
+            #         img_p = images_dir+str(i+1)+'/'+file
+            #         lbl_p = lbls_dir+str(i+1)+'/'+file
+            #         if not os.path.isfile(img_p) or not os.path.isfile(lbl_p):
+            #             exist = False
+            #             print('NoT exist')
+            #     if exist:
+            #         img_filenames.append(file_name)
+            #         lbls_filenames.append(file_name)
 
         return np.array(img_filenames), np.array(lbls_filenames)
 

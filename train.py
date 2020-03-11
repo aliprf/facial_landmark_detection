@@ -100,10 +100,10 @@ class Train:
         #                     verbose=1
         #                     )
 
-        model.fit_generator(generator=[my_training_batch_generator, my_training_batch_generator],
+        model.fit_generator(generator=my_training_batch_generator,
                             epochs=self.EPOCHS,
                             verbose=1,
-                            validation_data=[my_validation_batch_generator, my_validation_batch_generator],
+                            validation_data=my_validation_batch_generator,
                             steps_per_epoch=self.STEPS_PER_EPOCH,
                             callbacks=callbacks_list,
                             use_multiprocessing=True,
@@ -254,14 +254,14 @@ class Train:
     def _create_generators(self):
         tf_utils = TFRecordUtility()
         if self.point_wise:
-            if os.path.isfile('x_train_filenames_pw.npy') and \
-                    os.path.isfile('x_val_filenames_pw.npy') and \
-                    os.path.isfile('y_train_filenames_pw.npy') and \
-                    os.path.isfile('y_val_filenames_pw.npy'):
-                x_train_filenames = load('x_train_filenames_pw.npy')
-                x_val_filenames = load('x_val_filenames_pw.npy')
-                y_train = load('y_train_filenames_pw.npy')
-                y_val = load('y_val_filenames_pw.npy')
+            if True or os.path.isfile('npy/' +'x_train_filenames_pw.npy') and \
+                    os.path.isfile('npy/' +'x_val_filenames_pw.npy') and \
+                    os.path.isfile('npy/' +'y_train_filenames_pw.npy') and \
+                    os.path.isfile('npy/' +'y_val_filenames_pw.npy'):
+                x_train_filenames = load('npy/x_train_filenames_pw.npy')
+                x_val_filenames = load('npy/x_val_filenames_pw.npy')
+                y_train = load('npy/y_train_filenames_pw.npy')
+                y_val = load('npy/y_val_filenames_pw.npy')
             else:
                 for i in range(68):
                     filenames, labels = tf_utils.create_fused_images_and_labels_name()

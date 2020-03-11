@@ -32,14 +32,18 @@ if __name__ == '__main__':
     #                 inception_mode=False,
     #                 num_output_layers=1,
     #                 weight=None)
+
     # tf_record_util.create_fused_images_and_labels_name()
+
+    # cnn_model.create_shallow_reg()
+
 
     trainer = Train(use_tf_record=False,
                     dataset_name=DatasetName.ibug,
                     custom_loss=False,
                     arch='sh_reg',
                     inception_mode=False,
-                    num_output_layers=1,
+                    num_output_layers=2,
                     weight=None,
                     point_wise=True)
 
