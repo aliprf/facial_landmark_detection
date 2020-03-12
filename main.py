@@ -43,7 +43,7 @@ if __name__ == '__main__':
                     custom_loss=False,
                     arch='sh_reg',
                     inception_mode=False,
-                    num_output_layers=2,
+                    num_output_layers=68,
                     weight=None,
                     point_wise=True)
 

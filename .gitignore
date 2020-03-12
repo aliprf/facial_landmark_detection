@@ -8,6 +8,8 @@ __pycache__/
 *.pkl
 data/*
 venv/*
+log/*
+npy/*
 .idea/*
 *.png
 *.h5
